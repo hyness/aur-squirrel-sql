@@ -52,6 +52,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          echo "--- debug ---"
+          pwd
+          ls -la
+          git config --global --add safe.directory "$(pwd)"
+          git status
+          echo "--- end debug ---"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           BRANCH="update-${{ needs.check.outputs.new_version }}"
