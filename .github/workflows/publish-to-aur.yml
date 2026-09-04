@@ -1,0 +1,46 @@
+name: Publish to AUR
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  publish:
+    name: Push package files to the AUR git remote
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
+
+      - name: Sync package files onto AUR's history and push
+        env:
+          GIT_SSH_COMMAND: ssh -i /home/runner/.ssh/aur -o UserKnownHostsFile=/home/runner/.ssh/known_hosts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git remote add aur ssh://aur@aur.archlinux.org/squirrel-sql.git
+          git fetch aur master
+
+          # AUR rejects any push containing subdirectories, so build the
+          # publish commit on top of AUR's own (flat) history rather than
+          # pushing this repo's tree (which has .github/ and scripts/).
+          git checkout -b aur-sync aur/master
+          git checkout main -- PKGBUILD .SRCINFO squirrel-sql squirrel-sql.desktop squirrel-sql.install
+
+          if git diff --cached --quiet; then
+            echo "No package changes to publish"
+            exit 0
+          fi
+
+          PKGVER=$(grep -m1 '^pkgver=' PKGBUILD | cut -d= -f2)
+          git commit -m "Update to $PKGVER"
+          git push aur aur-sync:master
